@@ -1,0 +1,22 @@
+# Amvera Cloud — Node.js server config для Next.js приложения.
+#
+# Trigger.dev worker НЕ деплоится сюда — он живёт в Trigger.dev cloud,
+# куда мы публикуем задачи отдельно командой `npm run trigger:deploy`
+# из локального окружения (или из CI).
+#
+# Все секреты (DATABASE_URL, KIE_API_KEY, R2_*, TELEGRAM_*, NEXTAUTH_SECRET
+# и т.д.) задаются в Amvera Dashboard → Project → Secrets, а не в этом файле.
+meta:
+  environment: node
+  toolchain:
+    name: node
+    version: 20
+
+build:
+  additionalCommands:
+    - npm ci
+    - npm run build
+
+run:
+  command: npm start
+  containerPort: 3000
