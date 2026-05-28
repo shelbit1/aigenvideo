@@ -1,0 +1,237 @@
+// Prisma schema for AigenVideo
+// Docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// =====================================================================
+// AUTH
+// =====================================================================
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String
+  image     String?
+
+  // Telegram delivery (см. context3.md): после рендера ролик отправляется
+  // в Telegram-аккаунт пользователя автоматически. Линкуем через deep link
+  // https://t.me/<bot>?start=<userId>.
+  telegramChatId    String?  @unique
+  telegramUsername  String?
+  telegramConnected Boolean  @default(false)
+  telegramLinkedAt  DateTime?
+
+  projects        Project[]
+  factoryProjects FactoryProject[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// =====================================================================
+// PROJECTS
+// =====================================================================
+
+enum ProjectStatus {
+  DRAFT
+  GENERATING
+  READY
+  ERROR
+}
+
+enum GenerationMode {
+  REALISTIC
+  CARTOON
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  title       String
+  brief       String?
+  status      ProjectStatus @default(DRAFT)
+  durationSeconds Int       @default(5)
+
+  // Режим генерации: REALISTIC (UGC, lifestyle, fashion) или CARTOON (3D animation Pixar-inspired).
+  generationMode  GenerationMode @default(REALISTIC)
+
+  // Обложка/первое фото продукта (для thumbnail в дашборде).
+  sourceImageUrl String?
+  // Все загруженные фото продукта: front/back/side/detail/lifestyle (до 10).
+  sourceImages   String[]      @default([])
+
+  // Реальные размеры продукта (опционально, не для одежды/обуви).
+  // Формат: { length, width, height, weight?, unit }
+  dimensions      Json?
+
+  // Product Identity Object — результат анализа изображений GPT-5.5.
+  // Глобальная память продукта: productType/material/shape/colors/details/etc.
+  // Передаётся в каждый scene prompt для визуальной consistency.
+  productIdentity Json?
+
+  finalVideoUrl  String?
+  thumbnailUrl   String?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  generations Generation[]
+  // Если проект был запущен из Content Factory, тут будет линковка на сценарий.
+  factoryScenario FactoryScenario?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("projects")
+}
+
+// =====================================================================
+// GENERATIONS (atomic AI calls inside a project pipeline)
+// =====================================================================
+
+enum GenerationType {
+  IDENTITY
+  SCRIPT
+  START_FRAME
+  VIDEO
+  RENDER
+  DELIVERY
+}
+
+enum GenerationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// =====================================================================
+// CONTENT FACTORY (см. context4.md)
+// =====================================================================
+
+enum FactoryStatus {
+  DRAFT
+  PLANNING
+  AWAITING_APPROVAL
+  GENERATING
+  SCHEDULED
+  COMPLETED
+  FAILED
+}
+
+enum ScenarioStatus {
+  DRAFT
+  APPROVED
+  REGENERATING
+  QUEUED
+  GENERATING
+  READY
+  DELIVERED
+  FAILED
+}
+
+model FactoryProject {
+  id              String         @id @default(cuid())
+  title           String
+  niche           String?
+  description     String?
+  targetAudience  String?
+  generationMode  GenerationMode @default(REALISTIC)
+  reelDuration    Int            @default(5)
+  videosPerWeek   Int            @default(7)
+  status          FactoryStatus  @default(DRAFT)
+  errorMessage    String?
+
+  // Источник продукта (как в обычном Project — но опциональный).
+  sourceImageUrl  String?
+  sourceImages    String[]       @default([])
+  dimensions      Json?
+  productIdentity Json?
+
+  // Глобальная контентная стратегия недели (GPT-5.5).
+  weeklyStrategy  Json?
+
+  // Расписание ежедневной доставки.
+  deliveryTime     String   @default("10:00") // HH:MM (24h)
+  deliveryTimezone String   @default("UTC")
+  productionStartedAt DateTime?
+
+  userId    String
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  scenarios FactoryScenario[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("factory_projects")
+}
+
+model FactoryScenario {
+  id          String         @id @default(cuid())
+  factoryId   String
+  factory     FactoryProject @relation(fields: [factoryId], references: [id], onDelete: Cascade)
+
+  deliveryDay Int            // 1..N (порядковый день внутри недели)
+  title       String
+  hook        String
+  summary     String
+  visualStyle String
+  conceptType String         // lifestyle | emotional | transformation | POV | street | aesthetic
+  brief       String         // полный brief, который пойдёт в generate-reel
+
+  approved    Boolean        @default(false)
+  status      ScenarioStatus @default(DRAFT)
+  feedback    String?
+
+  // Связь с реальным проектом, когда сценарий запускается в продакшен.
+  projectId   String?        @unique
+  project     Project?       @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  scheduledFor DateTime?
+  deliveredAt  DateTime?
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([factoryId, deliveryDay])
+  @@index([status, scheduledFor])
+  @@map("factory_scenarios")
+}
+
+model Generation {
+  id        String           @id @default(cuid())
+  type      GenerationType
+  status    GenerationStatus @default(PENDING)
+
+  prompt        String?
+  inputPayload  Json?
+  outputPayload Json?
+  outputUrl     String?
+  errorMessage  String?
+
+  // Async job tracking (Trigger.dev / Kie polling)
+  externalJobId String?
+  pollingUrl    String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  startedAt DateTime?
+  finishedAt DateTime?
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([status, type])
+  @@map("generations")
+}
