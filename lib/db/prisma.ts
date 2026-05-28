@@ -4,18 +4,25 @@ import { Pool, type PoolConfig } from "pg";
 import fs from "node:fs";
 import path from "node:path";
 
-const connectionString = process.env.DATABASE_URL;
+// На этапе `next build` переменные окружения могут быть недоступны
+// (например, у Amvera по умолчанию они только на стадии Запуск).
+// Чтобы билд не падал на module-load — даём placeholder URL.
+// Реальные запросы к БД при таком URL упадут в рантайме (ECONNREFUSED),
+// что и должно произойти, если переменная не задана в проде.
+const PLACEHOLDER_URL =
+  "postgresql://placeholder:placeholder@localhost:5432/placeholder";
 
-if (!connectionString) {
-  throw new Error(
-    "DATABASE_URL не задан. Добавьте его в .env.local перед запуском."
-  );
-}
+const connectionString = process.env.DATABASE_URL ?? PLACEHOLDER_URL;
 
-if (connectionString.includes("YOUR_POSTGRES_HOST")) {
-  throw new Error(
-    "DATABASE_URL содержит плейсхолдер 'YOUR_POSTGRES_HOST'. Замените его на реальный хост Postgres в .env.local и перезапустите dev-сервер."
-  );
+if (
+  !process.env.DATABASE_URL ||
+  connectionString.includes("YOUR_POSTGRES_HOST")
+) {
+  if (typeof window === "undefined" && process.env.NODE_ENV !== "test") {
+    console.warn(
+      "[db] DATABASE_URL не задан или содержит плейсхолдер. Реальные запросы к БД упадут. Это допустимо только на этапе сборки."
+    );
+  }
 }
 
 declare global {
