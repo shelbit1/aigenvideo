@@ -4,7 +4,7 @@ import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_ID ?? "proj_ojwwqzyrlddidhasjgpt",
-  runtime: "node",
+  runtime: "node-22",
   logLevel: "info",
   maxDuration: 60 * 60, // 1h на самый длинный пайплайн
   dirs: ["./trigger"],
