@@ -23,12 +23,21 @@ async function main() {
     throw new Error("R2_BUCKET_NAME не задан в .env.local");
   }
 
+  // Дополнительные origins можно передавать через R2_CORS_EXTRA_ORIGINS
+  // (значения через запятую). Это полезно когда .env.local содержит
+  // только localhost-APP_URL, а продовые домены нужно добавить разово.
+  const extraOrigins =
+    process.env.R2_CORS_EXTRA_ORIGINS?.split(",")
+      .map((s) => s.trim())
+      .filter(Boolean) ?? [];
+
   const origins = Array.from(
     new Set([
       "http://localhost:3000",
       "http://localhost:3001",
       "http://localhost:3002",
       ...(process.env.APP_URL ? [process.env.APP_URL] : []),
+      ...extraOrigins,
     ])
   );
 
