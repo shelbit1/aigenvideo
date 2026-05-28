@@ -141,7 +141,7 @@ export function MultiImageUpload({
     if (inputRef.current) inputRef.current.value = "";
   };
 
-  const onDrop = (event: React.DragEvent<HTMLDivElement>) => {
+  const onDrop = (event: React.DragEvent<HTMLLabelElement>) => {
     event.preventDefault();
     setDragging(false);
     const files = Array.from(event.dataTransfer.files ?? []);
