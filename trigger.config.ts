@@ -1,5 +1,5 @@
 import { defineConfig } from "@trigger.dev/sdk";
-import { ffmpeg } from "@trigger.dev/build/extensions/core";
+import { ffmpeg, additionalFiles } from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 
 export default defineConfig({
@@ -30,6 +30,11 @@ export default defineConfig({
       prismaExtension({
         mode: "legacy",
         configFile: "./prisma.config.ts",
+      }),
+      // Yandex Cloud CA-сертификат нужен в runtime для pg.Pool SSL.
+      // Сам файл лежит в prisma/certs/ и в бандл Trigger.dev по умолчанию не попадает.
+      additionalFiles({
+        files: ["prisma/certs/yandex-cloud-ca.crt"],
       }),
     ],
   },
