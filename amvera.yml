@@ -13,7 +13,7 @@ meta:
 
 build:
   skip: false
-  additionalCommands: npm ci && npm run build
+  additionalCommands: npm run build
   artifacts:
     "*": /
 
